@@ -1,11 +1,31 @@
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const db = require("./db");
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 const app = express();
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
+
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+
+  if (!token) {
+    res.status(401).json({ error: "Нужен токен" });
+    return;
+  }
+
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: "Токен недействителен" });
+  }
+}
 
 app.get("/", (req, res) => {
   res.send("Привет от моего сервера!");
@@ -26,7 +46,7 @@ app.get("/prices", (req, res) => {
   res.json(list);
 });
 
-app.post("/prices", (req, res) => {
+app.post("/prices", requireAuth, (req, res) => {
   const coin = String(req.body.coin || "").toLowerCase();
   const price = Number(req.body.price);
 
@@ -72,6 +92,28 @@ app.post("/register", (req, res) => {
     .run(email, passwordHash);
 
   res.status(201).json({ id: result.lastInsertRowid, email });
+});
+
+app.post("/login", (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+
+  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    res.status(401).json({ error: "Неверный email или пароль" });
+    return;
+  }
+
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    expiresIn: "1h",
+  });
+
+  res.json({ token });
+});
+
+app.get("/me", requireAuth, (req, res) => {
+  res.json({ id: req.user.userId, email: req.user.email });
 });
 
 app.listen(3000, () => {
