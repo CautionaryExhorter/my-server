@@ -9,6 +9,14 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL
+  )
+`);
+
 const count = db.prepare("SELECT COUNT(*) AS n FROM prices").get().n;
 
 if (count === 0) {
@@ -19,6 +27,7 @@ if (count === 0) {
 }
 
 const total = db.prepare("SELECT COUNT(*) AS n FROM prices").get().n;
-console.log("База готова, монет в таблице:", total);
+const users = db.prepare("SELECT COUNT(*) AS n FROM users").get().n;
+console.log("База готова, монет:", total, "| пользователей:", users);
 
 module.exports = db;
